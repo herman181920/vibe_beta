@@ -215,6 +215,26 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
 - Report security vulnerabilities to security@vibe-beta.com
 - See [SECURITY.md](SECURITY.md) for our security policy
 
+## 📚 Documentation
+
+### Core Documentation
+- [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md) - System design and architecture
+- [API Reference](docs/API_REFERENCE.md) - Complete API documentation
+- [Testing Guide](docs/TESTING_GUIDE.md) - Testing strategies and examples
+- [AI Prompt Engineering](docs/AI_PROMPT_ENGINEERING.md) - AI integration guide
+- [Implementation Status](docs/IMPLEMENTATION_STATUS.md) - Current progress tracking
+
+### Project Management
+- [Product Context](docs/PROJECT_CONTEXT.md) - Business and market analysis
+- [Development Roadmap](docs/DEVELOPMENT_ROADMAP.md) - Feature timeline
+- [Product Manager Agent](docs/PRODUCT_MANAGER_AGENT.md) - AI PM guidelines
+- [Git Workflow](docs/GIT_WORKFLOW.md) - Version control protocols
+
+### Development
+- [Contributing Guide](docs/CONTRIBUTING.md) - How to contribute
+- [Claude Context](docs/CLAUDE.md) - AI assistant context
+- [Changelog](CHANGELOG.md) - Version history
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
