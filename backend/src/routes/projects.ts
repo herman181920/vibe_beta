@@ -56,6 +56,9 @@ router.get('/:id', authenticate, async (req, res) => {
         userId: req.user!.userId
       },
       include: {
+        files: {
+          orderBy: { path: 'asc' }
+        },
         messages: {
           orderBy: { createdAt: 'asc' }
         }
@@ -73,10 +76,10 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 })
 
-// Update project
+// Update project metadata
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { code, html, css, javascript } = req.body
+    const { name, description, isPublic } = req.body
     
     const project = await prisma.project.update({
       where: {
@@ -84,10 +87,9 @@ router.put('/:id', authenticate, async (req, res) => {
         userId: req.user!.userId
       },
       data: {
-        code,
-        html,
-        css,
-        javascript,
+        name,
+        description,
+        isPublic,
         updatedAt: new Date()
       }
     })
@@ -96,6 +98,42 @@ router.put('/:id', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Update project error:', error)
     res.status(400).json({ error: 'Failed to update project' })
+  }
+})
+
+// Update project files
+router.put('/:id/files', authenticate, async (req, res) => {
+  try {
+    const { files } = req.body as { files: Array<{ path: string; content: string; language: string }> }
+    
+    // Update files in a transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete existing files
+      await tx.file.deleteMany({
+        where: { projectId: req.params.id }
+      })
+      
+      // Create new files
+      await tx.file.createMany({
+        data: files.map(file => ({
+          projectId: req.params.id,
+          path: file.path,
+          content: file.content,
+          language: file.language
+        }))
+      })
+      
+      // Update project timestamp
+      await tx.project.update({
+        where: { id: req.params.id },
+        data: { updatedAt: new Date() }
+      })
+    })
+    
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Update files error:', error)
+    res.status(400).json({ error: 'Failed to update files' })
   }
 })
 

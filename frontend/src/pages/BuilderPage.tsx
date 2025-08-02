@@ -1,19 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, Code2, Eye, Download, Sparkles } from 'lucide-react'
+import { ArrowLeft, Send, Code2, Eye, Download, Sparkles, Loader2 } from 'lucide-react'
 import TextareaAutosize from 'react-textarea-autosize'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { aiService, type CodeChunk } from '@/services/ai.service'
 
 export default function BuilderPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { projectId } = useParams<{ projectId: string }>()
   const [prompt, setPrompt] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([])
   const [showCode, setShowCode] = useState(false)
-  const [generatedCode, setGeneratedCode] = useState('')
+  const [files, setFiles] = useState<Map<string, { content: string; language: string }>>(new Map())
+  const [currentFile, setCurrentFile] = useState<string>('')
+  const [previewHtml, setPreviewHtml] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,7 +37,7 @@ export default function BuilderPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!prompt.trim() || isGenerating) return
+    if (!prompt.trim() || isGenerating || !projectId) return
 
     const userMessage = prompt.trim()
     setPrompt('')
@@ -41,33 +45,89 @@ export default function BuilderPage() {
     setIsGenerating(true)
 
     try {
-      // TODO: Connect to backend API
-      // Simulating AI response for now
-      setTimeout(() => {
-        const mockResponse = "I'll create that for you! Here's what I'm building:\n\n1. Setting up the React components\n2. Adding the styling with Tailwind CSS\n3. Implementing the interactive features\n\nYour app is now ready in the preview!"
-        setMessages(prev => [...prev, { role: 'assistant', content: mockResponse }])
-        setGeneratedCode(`// Generated React Component
-import React from 'react'
+      const generator = aiService.generateCode({
+        projectId,
+        prompt: userMessage
+      })
 
-export default function App() {
-  return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold text-center mb-8">
-        Your Generated App
-      </h1>
-      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
-        <p>Your app content will appear here based on your description.</p>
-      </div>
-    </div>
-  )
-}`)
-        setIsGenerating(false)
-        toast.success('App generated successfully!')
-      }, 2000)
+      let assistantMessage = ''
+      const newFiles = new Map<string, { content: string; language: string }>()
+
+      for await (const chunk of generator) {
+        switch (chunk.type) {
+          case 'message':
+            if (chunk.message) {
+              assistantMessage += chunk.message + '\n'
+            }
+            break
+            
+          case 'file':
+            if (chunk.path && chunk.content) {
+              newFiles.set(chunk.path, {
+                content: chunk.content,
+                language: chunk.language || 'plaintext'
+              })
+              
+              // Update preview if it's the main file
+              if (chunk.path === 'src/App.tsx' || chunk.path === 'src/App.jsx') {
+                updatePreview(chunk.content)
+              }
+              
+              // Set first file as current
+              if (newFiles.size === 1) {
+                setCurrentFile(chunk.path)
+              }
+            }
+            break
+            
+          case 'error':
+            toast.error(chunk.message || 'Generation failed')
+            setIsGenerating(false)
+            return
+            
+          case 'complete':
+            toast.success('App generated successfully!')
+            break
+        }
+      }
+
+      setFiles(newFiles)
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: assistantMessage || `Generated ${newFiles.size} files for your application.`
+      }])
+      setIsGenerating(false)
+      
     } catch (error) {
       console.error('Error generating app:', error)
       toast.error('Failed to generate app. Please try again.')
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error. Please try again.'
+      }])
       setIsGenerating(false)
+    }
+  }
+
+  const updatePreview = (code: string) => {
+    // Extract the JSX and create a preview
+    const jsxMatch = code.match(/return\s*\(([\s\S]*?)\);?$/m)
+    if (jsxMatch) {
+      const jsx = jsxMatch[1]
+      // Simple preview - in production, this would use a proper bundler
+      setPreviewHtml(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <script src="https://cdn.tailwindcss.com"></script>
+          </head>
+          <body>
+            <div id="root">${jsx}</div>
+          </body>
+        </html>
+      `)
     }
   }
 
@@ -196,34 +256,65 @@ export default function App() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          {showCode ? (
-            <div className="h-full bg-[#1e1e1e] text-white p-4 overflow-auto">
-              <pre className="text-sm">
-                <code>{generatedCode || '// Your generated code will appear here...'}</code>
-              </pre>
+        <div className="flex-1 flex">
+          {/* File list (when in code view) */}
+          {showCode && files.size > 0 && (
+            <div className="w-48 border-r border-border bg-muted/30 p-2 overflow-y-auto">
+              <div className="text-xs font-medium text-muted-foreground mb-2">FILES</div>
+              {Array.from(files.keys()).map(path => (
+                <button
+                  key={path}
+                  onClick={() => setCurrentFile(path)}
+                  className={cn(
+                    "w-full text-left px-2 py-1 text-sm rounded hover:bg-accent transition-colors truncate",
+                    currentFile === path && "bg-accent"
+                  )}
+                >
+                  {path.split('/').pop()}
+                </button>
+              ))}
             </div>
-          ) : (
-            <iframe
-              className="w-full h-full bg-white"
-              title="App Preview"
-              srcDoc={`
-                <!DOCTYPE html>
-                <html>
-                  <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <script src="https://cdn.tailwindcss.com"></script>
-                  </head>
-                  <body>
-                    <div id="root">
-                      ${generatedCode ? '<div class="min-h-screen bg-gray-100 p-8"><h1 class="text-3xl font-bold text-center">Your app preview will appear here</h1></div>' : '<div class="min-h-screen flex items-center justify-center text-gray-400"><p>Start building to see your app here...</p></div>'}
-                    </div>
-                  </body>
-                </html>
-              `}
-            />
           )}
+          
+          {/* Main content area */}
+          <div className="flex-1 overflow-hidden">
+            {showCode ? (
+              <div className="h-full bg-[#1e1e1e] text-white p-4 overflow-auto">
+                {currentFile && files.get(currentFile) ? (
+                  <div>
+                    <div className="text-sm text-gray-400 mb-2">// {currentFile}</div>
+                    <pre className="text-sm">
+                      <code>{files.get(currentFile)?.content || ''}</code>
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-center mt-10">
+                    {files.size === 0 ? '// Your generated code will appear here...' : 'Select a file to view'}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <iframe
+                className="w-full h-full bg-white"
+                title="App Preview"
+                srcDoc={previewHtml || `
+                  <!DOCTYPE html>
+                  <html>
+                    <head>
+                      <meta charset="UTF-8">
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                      <script src="https://cdn.tailwindcss.com"></script>
+                    </head>
+                    <body>
+                      <div class="min-h-screen flex items-center justify-center text-gray-400">
+                        <p>Start building to see your app here...</p>
+                      </div>
+                    </body>
+                  </html>
+                `}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

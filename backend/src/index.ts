@@ -6,7 +6,7 @@ import { Server } from 'socket.io'
 import { PrismaClient } from '@prisma/client'
 import authRoutes from './routes/auth'
 import projectRoutes from './routes/projects'
-import aiRoutes from './routes/ai'
+import createAIRouter from './routes/ai'
 
 dotenv.config()
 
@@ -32,7 +32,7 @@ app.use(express.json())
 // Routes
 app.use('/api/auth', authRoutes)
 app.use('/api/projects', projectRoutes)
-app.use('/api/ai', aiRoutes)
+app.use('/api/ai', createAIRouter(io))
 
 // Health check
 app.get('/api/health', (req, res) => {

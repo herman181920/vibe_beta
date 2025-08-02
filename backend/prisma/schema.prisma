@@ -23,15 +23,25 @@ model Project {
   description String?
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  code        String?  @default("")
-  html        String?  @default("")
-  css         String?  @default("")
-  javascript  String?  @default("")
   framework   String   @default("react")
   isPublic    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  files       File[]
   messages    Message[]
+}
+
+model File {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  path      String
+  content   String
+  language  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([projectId, path])
 }
 
 model Message {
@@ -40,5 +50,6 @@ model Message {
   project   Project  @relation(fields: [projectId], references: [id])
   role      String   // "user" or "assistant"
   content   String
+  metadata  String?  // Store provider, tokens, etc. as JSON string
   createdAt DateTime @default(now())
 }
